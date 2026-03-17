@@ -133,7 +133,7 @@ jobs:
 
       - name: Skip Tauri build when signing disabled
         if: inputs.skip_tauri_signing == 'true'
-        run: echo "skip_tauri_signing=true: skip local tauri packaging (macOS/Windows/Linux) so no TAURI_SIGNING_PRIVATE_KEY required"
+        run: 'echo "skip_tauri_signing=true: skip local tauri packaging (macOS/Windows/Linux) so no TAURI_SIGNING_PRIVATE_KEY required"'
 
       - name: Prepare macOS Assets
         if: runner.os == 'macOS'
