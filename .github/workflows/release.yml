@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_tauri_signing:
+        description: 'Set true to skip Tauri signing (use for test build without secret)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -88,6 +94,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Set Tauri signing key
+        if: ${{ inputs.skip_tauri_signing != 'true' }}
         shell: bash
         env:
           RAW_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
