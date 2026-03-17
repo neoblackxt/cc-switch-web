@@ -359,7 +359,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates curl wget git file sudo
+            ca-certificates curl wget git file sudo build-essential
 
       - uses: actions/checkout@v4
 
