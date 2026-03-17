@@ -380,12 +380,16 @@ jobs:
           ZIG_VERSION=0.13.0
           curl -L "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" | tar -xJ -C /tmp
           sudo mv "/tmp/zig-linux-x86_64-${ZIG_VERSION}/zig" /usr/local/bin/
+          zig version
           # Install cargo-zigbuild
           cargo install cargo-zigbuild
+          cargo zigbuild --version
 
       - name: Build server binary with zig (glibc 2.31 compatible)
         run: |
           cd src-tauri
+          # 添加 target
+          rustup target add ${{ matrix.target }}
           # 使用 glibc 2.31 作为目标版本（兼容 2.34）
           cargo zigbuild --release --no-default-features --features web-server --example server --target ${{ matrix.target }}.2.31
 
