@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      skip_tauri_signing:
+        description: 'Set true to skip Tauri signing (use for test build without secret)'
+        required: false
+        default: 'false'
 
 permissions:
   contents: write
@@ -15,14 +21,28 @@ concurrency:
 jobs:
   release:
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     strategy:
       matrix:
         include:
           - os: windows-2022
+            container: null
           - os: ubuntu-22.04
+            container: ubuntu:20.04
           - os: macos-14
+            container: null
 
     steps:
+      - name: Install container dependencies
+        if: matrix.container == 'ubuntu:20.04'
+        shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl wget git file sudo
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -42,11 +62,13 @@ jobs:
       - name: Install Linux system deps
         if: runner.os == 'Linux'
         shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           set -euxo pipefail
-          sudo apt-get update
+          apt-get update
           # Core build tools and pkg-config
-          sudo apt-get install -y --no-install-recommends \
+          apt-get install -y --no-install-recommends \
             build-essential \
             pkg-config \
             curl \
@@ -55,16 +77,16 @@ jobs:
             patchelf \
             libssl-dev
           # GTK/GLib stack for gdk-3.0, glib-2.0, gio-2.0
-          sudo apt-get install -y --no-install-recommends \
+          apt-get install -y --no-install-recommends \
             libgtk-3-dev \
             librsvg2-dev \
             libayatana-appindicator3-dev
           # WebKit2GTK (version differs across Ubuntu images; try 4.1 then 4.0)
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev \
-            || sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.0-dev
+          apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev \
+            || apt-get install -y --no-install-recommends libwebkit2gtk-4.0-dev
           # libsoup also changed major version; prefer 3.0 with fallback to 2.4
-          sudo apt-get install -y --no-install-recommends libsoup-3.0-dev \
-            || sudo apt-get install -y --no-install-recommends libsoup2.4-dev
+          apt-get install -y --no-install-recommends libsoup-3.0-dev \
+            || apt-get install -y --no-install-recommends libsoup2.4-dev
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
@@ -88,6 +110,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Set Tauri signing key
+        if: ${{ inputs.skip_tauri_signing != 'true' }}
         shell: bash
         env:
           RAW_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -113,19 +136,24 @@ jobs:
           echo "✅ Tauri signing key configured（已去除空白并通过 base64 校验）"
 
       - name: Build Tauri App (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && inputs.skip_tauri_signing != 'true'
         run: pnpm tauri build --target universal-apple-darwin
 
       - name: Build Tauri App (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.skip_tauri_signing != 'true'
         run: pnpm tauri build
 
       - name: Build Tauri App (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && inputs.skip_tauri_signing != 'true'
         run: pnpm tauri build
+
+      - name: Skip Tauri build when signing disabled
+        if: inputs.skip_tauri_signing == 'true'
+        run: 'echo "skip_tauri_signing=true: skip local tauri packaging (macOS/Windows/Linux) so no TAURI_SIGNING_PRIVATE_KEY required"'
 
       - name: Prepare macOS Assets
         if: runner.os == 'macOS'
+        id: prepare-macos
         shell: bash
         run: |
           set -euxo pipefail
@@ -144,9 +172,11 @@ jobs:
             fi
           done
           if [ -z "$TAR_GZ" ]; then
-            echo "No macOS .tar.gz updater artifact found" >&2
-            exit 1
+            echo "⚠️ No macOS .tar.gz updater artifact found (build may be skipped)" >&2
+            echo "has_artifact=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "has_artifact=true" >> "$GITHUB_OUTPUT"
           # 重命名 tar.gz 为统一格式
           NEW_TAR_GZ="CC-Switch-${VERSION}-macOS.tar.gz"
           cp "$TAR_GZ" "release-assets/$NEW_TAR_GZ"
@@ -253,7 +283,29 @@ jobs:
           echo "Collected signatures (if any alongside artifacts):"
           ls -la release-assets/*.sig || echo "No signatures found"
 
+      - name: Check if has artifacts
+        id: check-artifacts
+        shell: bash
+        run: |
+          if [ -d "release-assets" ] && [ "$(ls -A release-assets)" ]; then
+            echo "has_artifacts=true" >> "$GITHUB_OUTPUT"
+            echo "Found artifacts:"
+            ls -la release-assets/
+          else
+            echo "has_artifacts=false" >> "$GITHUB_OUTPUT"
+            echo "No artifacts to upload"
+          fi
+
+      - name: Upload artifacts for debugging
+        if: steps.check-artifacts.outputs.has_artifacts == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ matrix.os }}
+          path: release-assets/*
+          retention-days: 7
+
       - name: Upload Release Assets
+        if: github.ref_type == 'tag' && steps.check-artifacts.outputs.has_artifacts == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -322,24 +374,24 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Install build deps (native only)
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
+      - name: Install zig and cargo-zigbuild
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libssl-dev pkg-config
+          # Install zig - 需要保留完整目录结构，因为 zig 需要访问 lib/ 目录
+          ZIG_VERSION=0.13.0
+          curl -L "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" | tar -xJ -C /tmp
+          sudo mv "/tmp/zig-linux-x86_64-${ZIG_VERSION}" /opt/zig
+          sudo ln -sf /opt/zig/zig /usr/local/bin/zig
+          zig version
+          # Install cargo-zigbuild
+          cargo install cargo-zigbuild
 
-      - name: Build server binary
+      - name: Build server binary with zig (glibc 2.31 compatible)
         run: |
-          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
-            cd src-tauri
-            cargo build --release --no-default-features --features web-server --example server --target ${{ matrix.target }}
-          else
-            # cross 从项目根目录运行，确保 dist-web 目录在容器内可访问
-            cross build --release --no-default-features --features web-server --example server --target ${{ matrix.target }} --manifest-path src-tauri/Cargo.toml
-          fi
+          cd src-tauri
+          # 添加 target
+          rustup target add ${{ matrix.target }}
+          # 使用 glibc 2.31 作为目标版本（兼容 2.34）
+          cargo zigbuild --release --no-default-features --features web-server --example server --target ${{ matrix.target }}.2.31
 
       - name: Prepare artifact
         run: |

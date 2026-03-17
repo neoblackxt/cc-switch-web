@@ -116,7 +116,7 @@ Download precompiled server binary—no compilation required:
 | **Linux x86_64 (glibc)**  | [cc-switch-server-linux-x86_64](https://github.com/Laliet/cc-switch-web/releases/download/v0.10.1/cc-switch-server-linux-x86_64)   |
 | **Linux aarch64 (glibc)** | [cc-switch-server-linux-aarch64](https://github.com/Laliet/cc-switch-web/releases/download/v0.10.1/cc-switch-server-linux-aarch64) |
 
-> **Note (glibc)**: Binaries are built on Ubuntu 22.04 (glibc baseline).  
+> **Note (glibc)**: Binaries are built on Ubuntu 20.04 (glibc 2.31+ baseline), compatible with GNU libc 2.34.  
 > If you see `GLIBC_2.xx not found`, use Docker or build from source.  
 > Check your glibc with `ldd --version`.
 
