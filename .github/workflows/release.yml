@@ -120,16 +120,20 @@ jobs:
           echo "✅ Tauri signing key configured（已去除空白并通过 base64 校验）"
 
       - name: Build Tauri App (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && inputs.skip_tauri_signing != 'true'
         run: pnpm tauri build --target universal-apple-darwin
 
       - name: Build Tauri App (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.skip_tauri_signing != 'true'
         run: pnpm tauri build
 
       - name: Build Tauri App (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && inputs.skip_tauri_signing != 'true'
         run: pnpm tauri build
+
+      - name: Skip Tauri build when signing disabled
+        if: inputs.skip_tauri_signing == 'true'
+        run: echo "skip_tauri_signing=true: skip local tauri packaging (macOS/Windows/Linux) so no TAURI_SIGNING_PRIVATE_KEY required"
 
       - name: Prepare macOS Assets
         if: runner.os == 'macOS'
