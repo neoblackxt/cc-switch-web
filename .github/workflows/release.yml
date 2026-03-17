@@ -137,6 +137,7 @@ jobs:
 
       - name: Prepare macOS Assets
         if: runner.os == 'macOS'
+        id: prepare-macos
         shell: bash
         run: |
           set -euxo pipefail
@@ -155,9 +156,11 @@ jobs:
             fi
           done
           if [ -z "$TAR_GZ" ]; then
-            echo "No macOS .tar.gz updater artifact found" >&2
-            exit 1
+            echo "⚠️ No macOS .tar.gz updater artifact found (build may be skipped)" >&2
+            echo "has_artifact=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "has_artifact=true" >> "$GITHUB_OUTPUT"
           # 重命名 tar.gz 为统一格式
           NEW_TAR_GZ="CC-Switch-${VERSION}-macOS.tar.gz"
           cp "$TAR_GZ" "release-assets/$NEW_TAR_GZ"
@@ -264,7 +267,29 @@ jobs:
           echo "Collected signatures (if any alongside artifacts):"
           ls -la release-assets/*.sig || echo "No signatures found"
 
+      - name: Check if has artifacts
+        id: check-artifacts
+        shell: bash
+        run: |
+          if [ -d "release-assets" ] && [ "$(ls -A release-assets)" ]; then
+            echo "has_artifacts=true" >> "$GITHUB_OUTPUT"
+            echo "Found artifacts:"
+            ls -la release-assets/
+          else
+            echo "has_artifacts=false" >> "$GITHUB_OUTPUT"
+            echo "No artifacts to upload"
+          fi
+
+      - name: Upload artifacts for debugging
+        if: steps.check-artifacts.outputs.has_artifacts == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ matrix.os }}
+          path: release-assets/*
+          retention-days: 7
+
       - name: Upload Release Assets
+        if: github.ref_type == 'tag' && steps.check-artifacts.outputs.has_artifacts == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
