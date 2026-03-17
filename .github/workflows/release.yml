@@ -341,7 +341,6 @@ jobs:
   build-web-server:
     name: Build Web Server Binary
     runs-on: ubuntu-22.04
-    container: ubuntu:20.04
     needs: release  # 等待主 release 完成
     strategy:
       matrix:
@@ -352,15 +351,6 @@ jobs:
             artifact: cc-switch-server-linux-aarch64
 
     steps:
-      - name: Install container dependencies
-        shell: bash
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            ca-certificates curl wget git file sudo build-essential
-
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -384,26 +374,20 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Install build deps (native only)
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        env:
-          DEBIAN_FRONTEND: noninteractive
+      - name: Install zig and cargo-zigbuild
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends libssl-dev pkg-config
+          # Install zig
+          ZIG_VERSION=0.13.0
+          curl -L "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" | tar -xJ -C /tmp
+          sudo mv "/tmp/zig-linux-x86_64-${ZIG_VERSION}/zig" /usr/local/bin/
+          # Install cargo-zigbuild
+          cargo install cargo-zigbuild
 
-      - name: Build server binary
+      - name: Build server binary with zig (glibc 2.31 compatible)
         run: |
-          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
-            cd src-tauri
-            cargo build --release --no-default-features --features web-server --example server --target ${{ matrix.target }}
-          else
-            # cross 从项目根目录运行，确保 dist-web 目录在容器内可访问
-            cross build --release --no-default-features --features web-server --example server --target ${{ matrix.target }} --manifest-path src-tauri/Cargo.toml
-          fi
+          cd src-tauri
+          # 使用 glibc 2.31 作为目标版本（兼容 2.34）
+          cargo zigbuild --release --no-default-features --features web-server --example server --target ${{ matrix.target }}.2.31
 
       - name: Prepare artifact
         run: |
