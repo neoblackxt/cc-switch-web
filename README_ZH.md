@@ -114,7 +114,7 @@ _配置供应商_
 | **Linux x86_64 (glibc)**  | [cc-switch-server-linux-x86_64](https://github.com/Laliet/cc-switch-web/releases/download/v0.10.1/cc-switch-server-linux-x86_64)   |
 | **Linux aarch64 (glibc)** | [cc-switch-server-linux-aarch64](https://github.com/Laliet/cc-switch-web/releases/download/v0.10.1/cc-switch-server-linux-aarch64) |
 
-> **glibc 说明**：预编译二进制基于 Ubuntu 22.04 构建。  
+> **glibc 说明**：预编译二进制基于 Ubuntu 20.04（glibc 2.31+ 基线）构建，兼容 GNU libc 2.34。  
 > 如果报 `GLIBC_2.xx not found`，请改用 Docker 或源码构建。  
 > 可用 `ldd --version` 查看 glibc 版本。
 
