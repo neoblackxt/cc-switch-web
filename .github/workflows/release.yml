@@ -25,7 +25,7 @@ jobs:
       matrix:
         include:
           - os: windows-2022
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
           - os: macos-14
 
     steps:
@@ -324,7 +324,7 @@ jobs:
 
   build-web-server:
     name: Build Web Server Binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: release  # 等待主 release 完成
     strategy:
       matrix:

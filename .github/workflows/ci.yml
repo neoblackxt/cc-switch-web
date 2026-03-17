@@ -5,7 +5,7 @@ on:
     branches: [main, develop, fix/*]
   pull_request:
     branches: [main]
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-2022, macos-14]
+        os: [ubuntu-22.04, windows-2022, macos-14]
 
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +86,7 @@ jobs:
 
   frontend-test:
     name: Frontend Test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -114,7 +114,7 @@ jobs:
   integration-test:
     name: Integration Test (Linux)
     needs: [check, frontend-test]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
