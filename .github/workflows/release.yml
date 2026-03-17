@@ -383,7 +383,6 @@ jobs:
           zig version
           # Install cargo-zigbuild
           cargo install cargo-zigbuild
-          cargo zigbuild --version
 
       - name: Build server binary with zig (glibc 2.31 compatible)
         run: |
